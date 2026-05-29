@@ -23,8 +23,15 @@ from routes.settings           import router as settings_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if os.getenv("FB_PAGE_ACCESS_TOKEN"):
+    fb_token = os.getenv("FB_PAGE_ACCESS_TOKEN") or get_setting("fb_page_access_token")
+    if fb_token:
         asyncio.create_task(start_polling_loop())
+    else:
+        import logging
+        logging.getLogger("avbob").warning(
+            "FB_PAGE_ACCESS_TOKEN not set — auto-polling disabled. "
+            "Add it via /settings or set the FB_PAGE_ACCESS_TOKEN secret."
+        )
     yield
 
 
