@@ -16,9 +16,13 @@ router = APIRouter()
 
 GRAPH_URL = "https://graph.facebook.com/v19.0"
 
+# Track last poll time for the status endpoint
+_last_poll_result: dict = {"status": "never_run", "saved": 0, "skipped": 0, "last_run": None}
+
 
 # ── Core polling logic (shared by background task + manual trigger) ─
 async def poll_facebook_page() -> dict:
+    global _last_poll_result
     FB_PAGE_ACCESS_TOKEN = get_setting("fb_page_access_token") or os.getenv("FB_PAGE_ACCESS_TOKEN", "")
     if not FB_PAGE_ACCESS_TOKEN:
         logger.error("FB_PAGE_ACCESS_TOKEN is not set — cannot poll")
@@ -74,8 +78,12 @@ async def poll_facebook_page() -> dict:
             logger.error("Failed to process post: %s", exc)
             skipped += 1
 
+    from datetime import datetime, timezone
     logger.info("FB poll complete: saved=%d skipped=%d", saved, skipped)
-    return {"status": "ok", "saved": saved, "skipped": skipped, "total_posts": len(posts)}
+    result = {"status": "ok", "saved": saved, "skipped": skipped, "total_posts": len(posts),
+              "last_run": datetime.now(timezone.utc).isoformat()}
+    _last_poll_result = result
+    return result
 
 
 # ── Background polling task (runs every 10 minutes) ────────────
@@ -98,13 +106,28 @@ async def route_poll():
     return result
 
 
-# ── Webhook verification (kept for future use) ──────────────────
+# ── Facebook status endpoint ────────────────────────────────────
+@router.get("/facebook/status", tags=["Facebook"])
+def fb_status():
+    """Return current polling status and token health (non-blocking)."""
+    token = get_setting("fb_page_access_token") or os.getenv("FB_PAGE_ACCESS_TOKEN", "")
+    return {
+        "token_configured": bool(token),
+        "token_preview": (token[:8] + "…") if len(token) > 8 else ("not set" if not token else token),
+        "polling_active": bool(token),
+        "poll_interval_seconds": 600,
+        **_last_poll_result,
+    }
+
+
+# ── Webhook verification ─────────────────────────────────────────
 @router.get("/webhook/facebook", tags=["Facebook"])
 def fb_verify(request: Request):
     mode      = request.query_params.get("hub.mode")
     token     = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
 
+    FB_VERIFY_TOKEN = get_setting("fb_verify_token") or os.getenv("FB_VERIFY_TOKEN", "")
     if not FB_VERIFY_TOKEN:
         raise HTTPException(status_code=500, detail="FB_VERIFY_TOKEN not configured")
     if mode == "subscribe" and token == FB_VERIFY_TOKEN:
