@@ -4,61 +4,58 @@ AI-powered funeral insurance lead detection and CRM for AVBOB consultants in Sou
 
 ## How it works
 
-- **Chrome Extension** — detects funeral cover keywords in Facebook posts and injects an action toolbar. Consultants can AI-analyse a post, generate a reply, get a WhatsApp follow-up link, and save the lead to the CRM — all without leaving Facebook.
-- **FastAPI Backend** — scores leads with OpenAI, stores them in PostgreSQL (Supabase), and exposes a built-in CRM dashboard at `/dashboard`.
+The backend automatically polls your Facebook Page for posts mentioning funeral cover keywords, scores them with AI, and stores qualified leads in PostgreSQL (Supabase). Consultants view and manage leads through the React PWA dashboard.
 
-## Quick Start
+```
+React PWA  →  /api/*  →  TypeScript Proxy  →  Python FastAPI  →  Supabase + OpenAI
+                                                     ↑
+                                              Facebook Page API
+                                           (auto-polled every 10 min)
+```
 
-### 1. Run the backend
+## Quick Start — Backend
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Set required environment variables (see .env.example)
+# Set required environment variables
 export SUPABASE_DATABASE_URL="postgresql://user:pass@host:5432/db"
-export OPENAI_API_KEY="sk-proj-..."     # optional — falls back to keyword scoring
+export OPENAI_API_KEY="sk-proj-..."            # optional — falls back to keyword scoring
+export FB_PAGE_ACCESS_TOKEN="your-token"       # or store it via /settings
 
-# Start the server
+# Start the Python backend
 cd backend
 uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 ```
 
-Visit `http://localhost:5000/dashboard` to see the CRM dashboard.
-
-### 2. Load the Chrome extension
-
-1. Open Chrome → `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `extension/` folder
-4. Click the AVBOB icon → **⚙ Settings** → enter your backend URL
-5. Browse Facebook groups — posts with funeral cover keywords get an action toolbar
+Visit `/api/dashboard` to see the CRM dashboard.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SUPABASE_DATABASE_URL` | Yes | PostgreSQL connection string |
-| `OPENAI_API_KEY` | Recommended | AI lead scoring (falls back to keywords if missing) |
-| `FB_PAGE_ACCESS_TOKEN` | Optional | Auto-poll your Facebook Page every 10 min |
+| `OPENAI_API_KEY` | Recommended | AI lead scoring |
+| `FB_PAGE_ACCESS_TOKEN` | Optional | Auto-poll Facebook Page (also settable via `/api/settings`) |
 | `FB_VERIFY_TOKEN` | Optional | Facebook webhook verification |
-
-See `.env.example` for the full list with comments.
 
 ## API Endpoints
 
-All served at root — no `/api` prefix:
+All accessible at the `/api` prefix:
 
 ```
-GET  /health              Health check
-GET  /get-leads           List all leads
-POST /save-lead           Score + persist a lead
-POST /analyze-lead        AI-score a post
-POST /generate-reply      Generate Facebook reply
-POST /whatsapp-link       Generate WhatsApp follow-up
-POST /update-status/{id}  Update lead status
-GET  /stats               Lead statistics
-GET  /dashboard           CRM dashboard (HTML)
+GET  /api/health              Health check
+GET  /api/get-leads           List all leads
+POST /api/save-lead           Score + persist a lead
+POST /api/analyze-lead        AI-score a post
+POST /api/generate-reply      Generate Facebook reply
+POST /api/whatsapp-link       Generate WhatsApp follow-up
+POST /api/update-status/{id}  Update lead status
+GET  /api/stats               Lead statistics
+GET  /api/dashboard           CRM dashboard (HTML)
+POST /api/facebook/poll       Manually trigger Facebook poll
+GET/POST /api/settings        Token management
 ```
 
 ## Deployment
